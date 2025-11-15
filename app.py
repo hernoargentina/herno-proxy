@@ -1,43 +1,53 @@
+from flask import Flask, render_template, request
 import requests
-from flask import Flask, request, jsonify
+import json
 
-app = Flask(__name__)
-
-APP_ID = "9dddf785"
-APP_KEY = "f843bbbb07cd57d4ec2426d66b918373"
+app = Flask(__name__, template_folder="templates", static_folder="static")
 
 @app.route("/")
-def home():
-    return "Proxy API de Herno funcionando correctamente."
+def index():
+    return render_template("index.html")
 
-@app.route("/api/buscar")
+@app.route("/buscar", methods=["POST"])
 def buscar():
-    query = request.args.get("query", "").strip()
-    pages = int(request.args.get("pages", "1"))
+    query = request.form.get("query")
+    paginas = int(request.form.get("paginas", 1))
 
-    if not query:
-        return jsonify({"error": "missing query"}), 400
+    # CORRECCIÓN: usar endpoint REAL de tu proxy
+    PROXY_URL = "https://flask-hello-world-7ck3.onrender.com/api/buscar"
 
-    results = []
+    try:
+        # Ahora enviamos GET como espera tu proxy
+        r = requests.get(
+            PROXY_URL,
+            params={"query": query, "pages": paginas},
+            timeout=30
+        )
 
-    for p in range(1, pages + 1):
-        url = f"https://api.adzuna.com/v1/api/jobs/ar/search/{p}"
-        params = {
-            "app_id": APP_ID,
-            "app_key": APP_KEY,
-            "what": query,
-            "results_per_page": 50,
-        }
+        raw = r.json()
 
-        r = requests.get(url, params=params)
-        data = r.json()
+    except Exception as e:
+        return f"<h2>Error llamando al proxy:</h2><pre>{e}</pre>"
 
-        if "results" not in data:
-            break
+    resultados = raw.get("resultados", [])
 
-        results.extend(data["results"])
+    # --- Limpieza ---
+    limpios = []
+    for item in resultados:
+        if isinstance(item, dict):
+            limpios.append(item)
+        else:
+            try:
+                limpios.append(json.loads(item))
+            except:
+                continue
 
-        if len(data["results"]) < 50:
-            break
+    return render_template(
+        "resultado.html",
+        query=query,
+        resultados=limpios,
+        total=len(limpios)
+    )
 
-    return jsonify({"query": query, "resultados": results})
+if __name__ == "__main__":
+    app.run(debug=True)
